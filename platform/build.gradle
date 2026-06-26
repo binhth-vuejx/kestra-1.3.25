@@ -137,6 +137,9 @@ dependencies {
         // for jOOQ to the same version as we use in EE
         api ("org.jooq:jooq:3.20.11")
 
+        // Redis client library
+        api "redis.clients:jedis:5.1.5"
+
         // Tests
         api "org.junit-pioneer:junit-pioneer:2.3.0"
         api 'org.hamcrest:hamcrest:3.0'

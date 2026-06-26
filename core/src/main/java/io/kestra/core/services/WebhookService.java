@@ -69,6 +69,9 @@ public class WebhookService {
     @Inject
     private Optional<OpenTelemetry> openTelemetry;
 
+    @Inject
+    private Optional<FastExecutionService> fastExecutionService = Optional.empty();
+
     /**
      * Parse query parameters from the webhook request URI.
      *
@@ -245,5 +248,110 @@ public class WebhookService {
      */
     public URI url(Flow flow, AbstractWebhookTrigger trigger) {
         return uriProvider.webhookUrl(flow, trigger);
+    }
+
+    /**
+     * Check if the webhook trigger should use the fast path for execution.
+     * Fast path is used when the trigger has wait:true to bypass queues and execute synchronously.
+     *
+     * @param trigger The webhook trigger
+     * @return true if fast path should be used, false otherwise
+     */
+    public boolean shouldUseFastPath(AbstractWebhookTrigger trigger) {
+        // Check if trigger is a Webhook instance with wait property
+        if (trigger instanceof io.kestra.plugin.core.trigger.Webhook webhook) {
+            boolean useFastPath = Boolean.TRUE.equals(webhook.getWait());
+            log.info(
+                "🚀 WEBHOOK FAST PATH CHECK: trigger={}, wait={}, useFastPath={}, fastExecutionService.available={}",
+                webhook.getId(), webhook.getWait(), useFastPath, !fastExecutionService.isEmpty()
+            );
+
+            if (!useFastPath) {
+                log.info("⚠️ WEBHOOK FAST PATH DISABLED: wait is {} (expected: true)", webhook.getWait());
+            }
+            return useFastPath && !fastExecutionService.isEmpty();
+        }
+        log.info("⚠️ WEBHOOK FAST PATH CHECK: trigger is not Webhook instance, type={}", trigger.getClass().getSimpleName());
+        return false;
+    }
+
+    /**
+     * Execute a flow using the fast path (synchronously) and return the result.
+     * This bypasses the execution queue and worker queue for low-latency responses.
+     *
+     * @param flow The flow to execute
+     * @param execution The execution to run
+     * @return A Mono containing the completed execution
+     */
+    public reactor.core.publisher.Mono<Execution> executeFlowFastPath(Flow flow, Execution execution) {
+        if (fastExecutionService.isEmpty()) {
+            log.warn("❌ FastExecutionService not available, falling back to normal path");
+            return reactor.core.publisher.Mono.empty();
+        }
+
+        try {
+            long startTime = System.currentTimeMillis();
+            log.info(
+                "⚡ FAST PATH EXECUTION STARTED: flow={}/{}, executionId={}, startTime={}",
+                flow.getNamespace(), flow.getId(), execution.getId(), startTime
+            );
+
+            // Execute the flow synchronously
+            Execution completedExecution = fastExecutionService.get().executeFlow(flow, execution);
+
+            long duration = System.currentTimeMillis() - startTime;
+            log.info(
+                "✅ FAST PATH EXECUTION COMPLETED: flow={}/{}, executionId={}, state={}, duration={}ms",
+                flow.getNamespace(), flow.getId(), execution.getId(), completedExecution.getState().getCurrent(), duration
+            );
+
+            if (duration > 1000) {
+                log.warn("⚠️ FAST PATH SLOW: Execution took {}ms (expected <100ms)", duration);
+            }
+
+            // Persist the completed execution to database
+            try {
+                persistFastExecution(completedExecution);
+                log.info(
+                    "✅ FAST PATH PERSISTENCE: Execution persisted successfully for flow={}/{}, executionId={}",
+                    flow.getNamespace(), flow.getId(), execution.getId()
+                );
+            } catch (Exception persistError) {
+                log.error(
+                    "❌ FAST PATH PERSISTENCE ERROR: Failed to persist execution for flow={}/{}, executionId={}: {}",
+                    flow.getNamespace(), flow.getId(), execution.getId(), persistError.getMessage(), persistError
+                );
+            }
+
+            return reactor.core.publisher.Mono.just(completedExecution);
+        } catch (Exception e) {
+            log.error(
+                "❌ FAST PATH EXECUTION ERROR: flow={}/{}, executionId={}, error={}",
+                flow.getNamespace(), flow.getId(), execution.getId(), e.getMessage(), e
+            );
+            // Return execution with FAILED state
+            Execution failedExecution = execution.withState(State.Type.FAILED);
+            return reactor.core.publisher.Mono.just(failedExecution);
+        }
+    }
+
+    /**
+     * Persist a completed fast-path execution to the database.
+     * This ensures the execution is visible in the UI and stored permanently.
+     *
+     * @param execution The completed execution to persist
+     * @throws QueueException If there is an error emitting to the queue
+     */
+    public void persistFastExecution(Execution execution) throws QueueException {
+        // Emit execution to queue for persistence
+        executionQueue.emit(execution);
+
+        // Publish event for UI updates
+        eventPublisher.publishEvent(CrudEvent.create(execution));
+
+        log.info(
+            "📝 FAST PATH PERSISTENCE: Execution persisted - executionId={}, state={}, outputs={}",
+            execution.getId(), execution.getState().getCurrent(), execution.getOutputs()
+        );
     }
 }

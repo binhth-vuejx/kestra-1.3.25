@@ -66,6 +66,9 @@ public class FlowService {
     Optional<FlowTopologyRepositoryInterface> flowTopologyRepository;
 
     @Inject
+    FlowCacheService flowCacheService;
+
+    @Inject
     Provider<RunContextFactory> runContextFactory; // Lazy init: avoid circular dependency error.
 
     /**
@@ -302,6 +305,23 @@ public class FlowService {
         }
 
         return flowRepository.get().findById(tenantId, namespace, flowId);
+    }
+
+    /**
+     * Gets the flow by ID using the cache, returning an Optional.
+     * This method is used for webhook and execution loading where we need the flow from cache without enforcing validation.
+     *
+     * @param tenant The tenant ID.
+     * @param namespace The flow's namespace.
+     * @param id The flow's ID.
+     * @return An Optional containing the Flow if found, empty otherwise.
+     */
+    public Optional<Flow> getFlowByIdUsingCache(final String tenant, final String namespace, final String id) {
+        if (flowRepository.isEmpty()) {
+            throw noRepositoryException();
+        }
+
+        return flowCacheService.get(tenant, namespace, id, Optional.empty());
     }
 
     public Stream<FlowInterface> keepLastVersion(Stream<FlowInterface> stream) {
@@ -615,7 +635,7 @@ public class FlowService {
             throw noRepositoryException();
         }
 
-        Optional<Flow> optional = flowRepository.get().findByIdWithoutAcl(tenant, namespace, id, revision);
+        Optional<Flow> optional = flowCacheService.get(tenant, namespace, id, revision);
         if (optional.isEmpty()) {
             throw new NoSuchElementException("Requested Flow is not found.");
         }

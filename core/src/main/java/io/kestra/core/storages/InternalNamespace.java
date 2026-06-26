@@ -41,6 +41,7 @@ public class InternalNamespace implements Namespace {
     private final StorageInterface storage;
     private final NamespaceFileMetadataRepositoryInterface namespaceFileMetadataRepository;
     private final Logger logger;
+    private final Optional<io.kestra.core.namespace.RillProjectSyncService> rillProjectSyncService;
 
     /**
      * Creates a new {@link InternalNamespace} instance.
@@ -50,7 +51,7 @@ public class InternalNamespace implements Namespace {
      */
     public InternalNamespace(@Nullable final String tenant, final String namespace, final StorageInterface storage,
         final NamespaceFileMetadataRepositoryInterface namespaceFileMetadataRepository) {
-        this(log, tenant, namespace, storage, namespaceFileMetadataRepository);
+        this(log, tenant, namespace, storage, namespaceFileMetadataRepository, Optional.empty());
     }
 
     /**
@@ -63,11 +64,43 @@ public class InternalNamespace implements Namespace {
      */
     public InternalNamespace(final Logger logger, @Nullable final String tenant, final String namespace, final StorageInterface storage,
         final NamespaceFileMetadataRepositoryInterface namespaceFileMetadataRepositoryInterface) {
+        this(logger, tenant, namespace, storage, namespaceFileMetadataRepositoryInterface, Optional.empty());
+    }
+
+    /**
+     * Creates a new {@link InternalNamespace} instance with Rill sync service.
+     *
+     * @param tenant The tenant.
+     * @param namespace The namespace
+     * @param storage The storage.
+     * @param namespaceFileMetadataRepository The metadata repository.
+     * @param rillProjectSyncService The Rill project sync service (optional).
+     */
+    public InternalNamespace(@Nullable final String tenant, final String namespace, final StorageInterface storage,
+        final NamespaceFileMetadataRepositoryInterface namespaceFileMetadataRepository,
+        final Optional<io.kestra.core.namespace.RillProjectSyncService> rillProjectSyncService) {
+        this(log, tenant, namespace, storage, namespaceFileMetadataRepository, rillProjectSyncService);
+    }
+
+    /**
+     * Creates a new {@link InternalNamespace} instance with Rill sync service.
+     *
+     * @param logger The logger to be used by this class.
+     * @param tenant The tenant.
+     * @param namespace The namespace
+     * @param storage The storage.
+     * @param namespaceFileMetadataRepositoryInterface The metadata repository.
+     * @param rillProjectSyncService The Rill project sync service (optional).
+     */
+    public InternalNamespace(final Logger logger, @Nullable final String tenant, final String namespace, final StorageInterface storage,
+        final NamespaceFileMetadataRepositoryInterface namespaceFileMetadataRepositoryInterface,
+        final Optional<io.kestra.core.namespace.RillProjectSyncService> rillProjectSyncService) {
         this.logger = Objects.requireNonNull(logger, "logger cannot be null");
         this.namespace = Objects.requireNonNull(namespace, "namespace cannot be null");
         this.storage = Objects.requireNonNull(storage, "storage cannot be null");
         this.namespaceFileMetadataRepository = Objects.requireNonNull(namespaceFileMetadataRepositoryInterface, "namespaceFileMetadataRepository cannot be null");
         this.tenant = tenant;
+        this.rillProjectSyncService = rillProjectSyncService;
     }
 
     @Override
@@ -399,6 +432,9 @@ public class InternalNamespace implements Namespace {
             );
 
             createdFiles.add(namespaceFile);
+            
+            // Sync file create to _rill_project
+            syncFileCreate(normalizedPath.toString(), cleanUri);
         } else if (onAlreadyExist == Conflicts.OVERWRITE || inRepository.get().isDeleted()) {
             storage.put(tenant, namespace, cleanUri, content);
 
@@ -427,6 +463,9 @@ public class InternalNamespace implements Namespace {
             }
 
             createdFiles.add(namespaceFile);
+            
+            // Sync file update to _rill_project
+            syncFileUpdate(normalizedPath.toString(), cleanUri);
         } else {
             // At this point, the file exists and we have to decide what to do based on the conflict strategy
             switch (onAlreadyExist) {
@@ -485,6 +524,9 @@ public class InternalNamespace implements Namespace {
                 .build()
         );
         storage.createDirectory(tenant, namespace, NamespaceFile.of(namespace, normalizedPath, 1).storagePath().toUri());
+        
+        // Sync directory create to _rill_project
+        syncDirectoryCreate(normalizedPath.toString());
 
         return NamespaceFile.fromMetadata(nsFileMetadata);
     }
@@ -509,8 +551,116 @@ public class InternalNamespace implements Namespace {
         ).toList();
 
         toDelete.forEach(namespaceFileMetadataRepository::save);
+        
+        // Hard-delete files from _files storage
+        toDelete.forEach(metadata -> {
+            try {
+                NamespaceFile nsFile = NamespaceFile.of(namespace, Path.of(metadata.getPath()), metadata.getVersion());
+                storage.delete(tenant, namespace, nsFile.storagePath().toUri());
+            } catch (Exception e) {
+                logger.debug("Failed to delete file from _files storage: {}/{}/{}", tenant, namespace, metadata.getPath(), e);
+            }
+        });
+        
+        // Sync delete to _rill_project
+        toDelete.forEach(metadata -> {
+            if (metadata.getPath().endsWith("/")) {
+                syncDirectoryDelete(metadata.getPath());
+            } else {
+                syncFileDelete(metadata.getPath());
+            }
+        });
 
         return toDelete.stream().map(NamespaceFile::fromMetadata).toList();
+    }
+
+    /**
+     * Syncs a file create operation to _rill_project.
+     */
+    private void syncFileCreate(String filePath, URI fileUri) {
+        if (rillProjectSyncService.isEmpty()) {
+            return;
+        }
+        
+        try {
+            try (InputStream content = storage.get(tenant, namespace, fileUri)) {
+                // Convert absolute path to relative path (remove leading /)
+                String relativePath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
+                rillProjectSyncService.get().syncFileCreate(tenant, namespace, relativePath, content);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to sync file create to _rill_project: {}/{}/{}", tenant, namespace, filePath, e);
+        }
+    }
+
+    /**
+     * Syncs a file update operation to _rill_project.
+     */
+    private void syncFileUpdate(String filePath, URI fileUri) {
+        if (rillProjectSyncService.isEmpty()) {
+            return;
+        }
+        
+        try {
+            try (InputStream content = storage.get(tenant, namespace, fileUri)) {
+                // Convert absolute path to relative path (remove leading /)
+                String relativePath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
+                rillProjectSyncService.get().syncFileUpdate(tenant, namespace, relativePath, content);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to sync file update to _rill_project: {}/{}/{}", tenant, namespace, filePath, e);
+        }
+    }
+
+    /**
+     * Syncs a file delete operation to _rill_project.
+     */
+    private void syncFileDelete(String filePath) {
+        if (rillProjectSyncService.isEmpty()) {
+            return;
+        }
+        
+        try {
+            // Convert absolute path to relative path (remove leading /)
+            String relativePath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
+            rillProjectSyncService.get().syncFileDelete(tenant, namespace, relativePath);
+        } catch (Exception e) {
+            logger.warn("Failed to sync file delete to _rill_project: {}/{}/{}", tenant, namespace, filePath, e);
+        }
+    }
+
+    /**
+     * Syncs a directory create operation to _rill_project.
+     */
+    private void syncDirectoryCreate(String dirPath) {
+        if (rillProjectSyncService.isEmpty()) {
+            return;
+        }
+        
+        try {
+            // Convert absolute path to relative path (remove leading /)
+            String relativePath = dirPath.startsWith("/") ? dirPath.substring(1) : dirPath;
+            rillProjectSyncService.get().syncDirectoryCreate(tenant, namespace, relativePath);
+        } catch (Exception e) {
+            logger.warn("Failed to sync directory create to _rill_project: {}/{}/{}", tenant, namespace, dirPath, e);
+        }
+    }
+
+    /**
+     * Syncs a directory delete operation to _rill_project.
+     */
+    private void syncDirectoryDelete(String dirPath) {
+        if (rillProjectSyncService.isEmpty()) {
+            return;
+        }
+        
+        try {
+            // Convert absolute path to relative path (remove leading /)
+            String relativePath = dirPath.startsWith("/") ? dirPath.substring(1) : dirPath;
+            rillProjectSyncService.get().syncDirectoryDelete(tenant, namespace, relativePath);
+        } catch (Exception e) {
+            logger.warn("Failed to sync directory delete to _rill_project: {}/{}/{}", tenant, namespace, dirPath, e);
+        }
     }
 
     @Override

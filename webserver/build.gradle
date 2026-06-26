@@ -38,6 +38,9 @@ dependencies {
 
     implementation("de.siegmar:fastcsv")
 
+    // Redis
+    implementation "redis.clients:jedis"
+
     // test
     testAnnotationProcessor project(':processor')
     testImplementation project(':core').sourceSets.test.output
