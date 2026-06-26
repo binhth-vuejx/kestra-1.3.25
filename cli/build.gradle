@@ -1,0 +1,64 @@
+configurations {
+    implementation.extendsFrom(micronaut)
+}
+
+tasks.register('runLocal', JavaExec) {
+    group = "application"
+    description = "Run Kestra as server local"
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "io.kestra.cli.App"
+    environment 'MICRONAUT_ENVIRONMENTS', 'override'
+    args 'server', 'local', '--plugins', '../local/plugins'
+}
+
+tasks.register('runStandalone', JavaExec) {
+    group = "application"
+    description = "Run Kestra as server standalone"
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "io.kestra.cli.App"
+    environment 'MICRONAUT_ENVIRONMENTS', 'override'
+    args 'server', 'standalone', '--plugins', '../local/plugins'
+}
+
+dependencies {
+    // micronaut
+    implementation "info.picocli:picocli"
+    implementation "io.micronaut.picocli:micronaut-picocli"
+    implementation "io.micronaut:micronaut-management"
+    implementation "io.micronaut:micronaut-http-server-netty"
+
+    // logs
+    implementation 'ch.qos.logback.contrib:logback-json-classic'
+    implementation 'ch.qos.logback.contrib:logback-jackson'
+
+    // OTLP metrics
+    implementation "io.micronaut.micrometer:micronaut-micrometer-registry-otlp"
+
+    // aether still use javax.inject
+    compileOnly 'javax.inject:javax.inject:1'
+
+    // modules
+    implementation project(":core")
+    implementation project(":script")
+
+    implementation project(":repository-memory")
+
+    implementation project(":runner-memory")
+
+    implementation project(":jdbc")
+    implementation project(":jdbc-h2")
+    implementation project(":jdbc-mysql")
+    implementation project(":jdbc-postgres")
+
+    implementation project(":storage-local")
+
+    // Kestra server components
+    implementation project(":executor")
+    implementation project(":scheduler")
+    implementation project(":webserver")
+    implementation project(":worker")
+
+    //test
+    testImplementation project(':tests')
+    testImplementation "org.wiremock:wiremock-jetty12"
+}

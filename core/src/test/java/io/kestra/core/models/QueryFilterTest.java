@@ -1,0 +1,446 @@
+package io.kestra.core.models;
+
+import java.util.List;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import io.kestra.core.exceptions.InvalidQueryFiltersException;
+import io.kestra.core.models.QueryFilter.Field;
+import io.kestra.core.models.QueryFilter.Op;
+import io.kestra.core.models.QueryFilter.Resource;
+import io.kestra.core.models.dashboards.filters.AbstractFilter;
+import io.kestra.core.models.dashboards.filters.EqualTo;
+import io.kestra.core.models.dashboards.filters.Prefix;
+import io.kestra.core.models.dashboards.filters.StartsWith;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
+public class QueryFilterTest {
+
+    @ParameterizedTest
+    @MethodSource("validOperationFilters")
+    void should_validate_all_operations(QueryFilter filter, Resource resource) {
+        assertDoesNotThrow(() -> QueryFilter.validateQueryFilters(List.of(filter), resource));
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidOperationFilters")
+    void should_fail_to_validate_all_operations(QueryFilter filter, Resource resource) {
+        InvalidQueryFiltersException e = assertThrows(
+            InvalidQueryFiltersException.class,
+            () -> QueryFilter.validateQueryFilters(List.of(filter), resource)
+        );
+        assertThat(e.getMessage()).contains("Operation");
+    }
+
+    static Stream<Arguments> validOperationFilters() {
+        return Stream.of(
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.EQUALS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.NOT_EQUALS).build(), Resource.FLOW),
+
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.EQUALS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.NOT_EQUALS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.IN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.NOT_IN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.STARTS_WITH).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.ENDS_WITH).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.CONTAINS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.REGEX).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.PREFIX).build(), Resource.FLOW),
+
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.EQUALS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.NOT_EQUALS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.IN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.NOT_IN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.CONTAINS).build(), Resource.FLOW),
+
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.EQUALS).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.NOT_EQUALS).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.IN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.NOT_IN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.STARTS_WITH).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.ENDS_WITH).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.CONTAINS).build(), Resource.LOG),
+
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.EQUALS).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.NOT_EQUALS).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.IN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.NOT_IN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.STARTS_WITH).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.ENDS_WITH).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.CONTAINS).build(), Resource.LOG),
+
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.EQUALS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.NOT_EQUALS).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.EQUALS).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.NOT_EQUALS).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.IN).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.NOT_IN).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.STARTS_WITH).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.ENDS_WITH).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.CONTAINS).build(), Resource.TRIGGER),
+
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.EQUALS).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.NOT_EQUALS).build(), Resource.NAMESPACE),
+
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.EQUALS).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.NOT_EQUALS).build(), Resource.LOG),
+
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.GREATER_THAN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.LESS_THAN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.EQUALS).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.NOT_EQUALS).build(), Resource.ASSET_USAGE),
+
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.GREATER_THAN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.LESS_THAN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.EQUALS).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.NOT_EQUALS).build(), Resource.KV_METADATA),
+
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.GREATER_THAN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.LESS_THAN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.EQUALS).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.NOT_EQUALS).build(), Resource.KV_METADATA),
+
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.EQUALS).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.NOT_EQUALS).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.CONTAINS).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.STARTS_WITH).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.ENDS_WITH).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.REGEX).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.IN).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.NOT_IN).build(), Resource.ASSET),
+
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.EQUALS).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.NOT_EQUALS).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.CONTAINS).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.STARTS_WITH).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.ENDS_WITH).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.REGEX).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.IN).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.NOT_IN).build(), Resource.CREDENTIALS),
+
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.EQUALS).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.NOT_EQUALS).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.CONTAINS).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.STARTS_WITH).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.ENDS_WITH).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.REGEX).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.IN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.NOT_IN).build(), Resource.ASSET_USAGE),
+
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.EQUALS).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.NOT_EQUALS).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.CONTAINS).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.STARTS_WITH).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.ENDS_WITH).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.REGEX).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.IN).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.NOT_IN).build(), Resource.ASSET),
+
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.EQUALS).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.NOT_EQUALS).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.CONTAINS).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.STARTS_WITH).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.ENDS_WITH).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.REGEX).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.IN).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.NOT_IN).build(), Resource.CREDENTIALS)
+        );
+    }
+
+    @Test
+    void toDashboardFilterBuilder_prefix_shouldReturnPrefixFilter() {
+        QueryFilter filter = QueryFilter.builder()
+            .field(Field.NAMESPACE)
+            .operation(Op.PREFIX)
+            .value("io.kestra.tests")
+            .build();
+
+        enum TestField {
+            NAMESPACE
+        }
+        AbstractFilter<TestField> result = filter.toDashboardFilterBuilder(TestField.NAMESPACE, filter.value());
+
+        assertThat(result).isInstanceOf(Prefix.class);
+        Prefix<TestField> prefix = (Prefix<TestField>) result;
+        assertThat(prefix.getValue()).isEqualTo("io.kestra.tests");
+        assertThat(prefix.getField()).isEqualTo(TestField.NAMESPACE);
+    }
+
+    @Test
+    void toDashboardFilterBuilder_equals_shouldReturnEqualToFilter() {
+        QueryFilter filter = QueryFilter.builder()
+            .field(Field.NAMESPACE)
+            .operation(Op.EQUALS)
+            .value("io.kestra.tests")
+            .build();
+
+        enum TestField {
+            NAMESPACE
+        }
+        AbstractFilter<TestField> result = filter.toDashboardFilterBuilder(TestField.NAMESPACE, filter.value());
+
+        assertThat(result).isInstanceOf(EqualTo.class);
+    }
+
+    @Test
+    void toDashboardFilterBuilder_startsWith_shouldReturnStartsWithFilter() {
+        QueryFilter filter = QueryFilter.builder()
+            .field(Field.NAMESPACE)
+            .operation(Op.STARTS_WITH)
+            .value("io.kestra")
+            .build();
+
+        enum TestField {
+            NAMESPACE
+        }
+        AbstractFilter<TestField> result = filter.toDashboardFilterBuilder(TestField.NAMESPACE, filter.value());
+
+        assertThat(result).isInstanceOf(StartsWith.class);
+    }
+
+    static Stream<Arguments> invalidOperationFilters() {
+        return Stream.of(
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.GREATER_THAN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.LESS_THAN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.IN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.NOT_IN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.STARTS_WITH).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.ENDS_WITH).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.CONTAINS).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.REGEX).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.QUERY).operation(Op.PREFIX).build(), Resource.FLOW),
+
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.SCOPE).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.GREATER_THAN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.LESS_THAN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.NAMESPACE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.FLOW),
+
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.GREATER_THAN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.LESS_THAN).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.STARTS_WITH).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.ENDS_WITH).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.REGEX).build(), Resource.FLOW),
+            Arguments.of(QueryFilter.builder().field(Field.LABELS).operation(Op.PREFIX).build(), Resource.FLOW),
+
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.FLOW_ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.START_DATE).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.END_DATE).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.STATE).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_EXECUTION_ID).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.GREATER_THAN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.LESS_THAN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.REGEX).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.TRIGGER_ID).operation(Op.PREFIX).build(), Resource.LOG),
+
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.GREATER_THAN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.LESS_THAN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.REGEX).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.EXECUTION_ID).operation(Op.PREFIX).build(), Resource.LOG),
+
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.GREATER_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.LESS_THAN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.NOT_IN).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.STARTS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.ENDS_WITH).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.CONTAINS).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.REGEX).build(), Resource.EXECUTION),
+            Arguments.of(QueryFilter.builder().field(Field.CHILD_FILTER).operation(Op.PREFIX).build(), Resource.EXECUTION),
+
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.GREATER_THAN).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.LESS_THAN).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.REGEX).build(), Resource.TRIGGER),
+            Arguments.of(QueryFilter.builder().field(Field.WORKER_ID).operation(Op.PREFIX).build(), Resource.TRIGGER),
+
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.GREATER_THAN).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.LESS_THAN).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.IN).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.NOT_IN).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.STARTS_WITH).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.ENDS_WITH).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.CONTAINS).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.REGEX).build(), Resource.NAMESPACE),
+            Arguments.of(QueryFilter.builder().field(Field.EXISTING_ONLY).operation(Op.PREFIX).build(), Resource.NAMESPACE),
+
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.GREATER_THAN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.LESS_THAN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.IN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.NOT_IN).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.STARTS_WITH).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.ENDS_WITH).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.CONTAINS).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.REGEX).build(), Resource.LOG),
+            Arguments.of(QueryFilter.builder().field(Field.MIN_LEVEL).operation(Op.PREFIX).build(), Resource.LOG),
+
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.IN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.NOT_IN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.STARTS_WITH).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.ENDS_WITH).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.CONTAINS).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.REGEX).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.CREATED).operation(Op.PREFIX).build(), Resource.ASSET_USAGE),
+
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.IN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.NOT_IN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.STARTS_WITH).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.ENDS_WITH).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.CONTAINS).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.REGEX).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.UPDATED).operation(Op.PREFIX).build(), Resource.KV_METADATA),
+
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.IN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.NOT_IN).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.STARTS_WITH).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.ENDS_WITH).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.CONTAINS).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.REGEX).build(), Resource.KV_METADATA),
+            Arguments.of(QueryFilter.builder().field(Field.EXPIRATION_DATE).operation(Op.PREFIX).build(), Resource.KV_METADATA),
+
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.PREFIX).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.LESS_THAN).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.GREATER_THAN).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.ASSET),
+
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.PREFIX).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.LESS_THAN).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.GREATER_THAN).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.CREDENTIALS),
+
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.PREFIX).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.LESS_THAN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.GREATER_THAN).build(), Resource.ASSET_USAGE),
+            Arguments.of(QueryFilter.builder().field(Field.ASSET_ID).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.ASSET_USAGE),
+
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.PREFIX).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.LESS_THAN).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.GREATER_THAN).build(), Resource.ASSET),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.ASSET),
+
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.PREFIX).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.LESS_THAN).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.LESS_THAN_OR_EQUAL_TO).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.GREATER_THAN).build(), Resource.CREDENTIALS),
+            Arguments.of(QueryFilter.builder().field(Field.TYPE).operation(Op.GREATER_THAN_OR_EQUAL_TO).build(), Resource.CREDENTIALS)
+        );
+    }
+
+}
