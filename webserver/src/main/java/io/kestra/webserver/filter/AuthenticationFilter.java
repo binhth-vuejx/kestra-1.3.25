@@ -121,6 +121,7 @@ public class AuthenticationFilter implements HttpServerFilter {
     private Boolean isValidSSOFromRequest(HttpRequest<?> request) {
         try {
             // Try DATALAKE_SSO_SESSION cookie
+            Cookie ssoSessionJWT = request.getCookies().get("DATALAKE_SSO_TOKEN");
             Cookie ssoSession = request.getCookies().get("DATALAKE_SSO_SESSION");
             Cookie accessTokenExpiresAt = request.getCookies().get("access_token_expires_at");
             if (ssoSession == null || ssoSession.getValue() == null || ssoSession.getValue().isEmpty() ||
@@ -129,7 +130,7 @@ public class AuthenticationFilter implements HttpServerFilter {
             }
             // SSO cookie found in request - validate it in Redis
             SessionData sessionData = sessionStoreService.getSession(ssoSession.getValue() + "||" + accessTokenExpiresAt.getValue());
-            if (sessionData == null || sessionData.getEmail() == null) return false;
+            if (sessionData == null || sessionData.getEmail() == null || ssoSessionJWT != sessionData.getAccessToken()) return false;
             return true;
         } catch (Exception e) {
             return false;
